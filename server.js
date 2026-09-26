@@ -1,21 +1,20 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const db = require("./db.js");
 
 dotenv.config();
 
 const app = express.use();
 app.use(express.json);
 
-const port = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 app.get("/", (req,res) => {
     res.json({
-        message: "Api stared successfully"
+        message: "Api running successfully"
     });
 });
 
 
 app.listen(PORT, () => {
-    console.log(`PORT STARTED AT &{PORT}`)
+    console.log(`Server listening on ${PORT}`);
 });
