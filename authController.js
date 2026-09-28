@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const User = require("./userSchema");
+const jwt = require("jsonwebtoken");
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -163,7 +164,177 @@ const verifyOtp = async (req, res) => {
     }
 };
 
+const resendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "User is already verified",
+      });
+    }
+
+    if (user.otpResendCount >= 3) {
+      return res.status(429).json({
+        success: false,
+        message: "Maximum OTP resend limit reached",
+      });
+    }
+
+    const otp = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    const otpExpiresAt = new Date(
+      Date.now() + 5 * 60 * 1000
+    );
+
+    user.otp = hashedOtp;
+    user.otpExpiresAt = otpExpiresAt;
+    user.otpResendCount += 1;
+
+    await user.save();
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Your New OTP Verification Code",
+      text: `Your new OTP is ${otp}. It will expire in 5 minutes.`,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "New OTP sent successfully",
+      warning: `You have ${3 - user.otpResendCount} OTP resend attempts left.`,
+    });
+  } catch (error) {
+    console.log(error.message);
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+const generateAccessToken = (user) => {
+  return jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+    },
+    process.env.JWT_ACCESS_SECRET,
+    {
+      expiresIn: "15m",
+    }
+  );
+};
+
+const generateRefreshToken = (user) => {
+  return jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+    },
+    process.env.JWT_REFRESH_SECRET,
+    {
+      expiresIn: "7d",
+    }
+  );
+};
+
+const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email before logging in",
+      });
+    }
+
+    const isPasswordCorrect = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+    });
+  } catch (error) {
+    console.log(error.message);
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   verifyOtp,
+  resendOtp,
+  loginUser,
 };
