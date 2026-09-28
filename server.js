@@ -1,14 +1,16 @@
 const express = require("express");
 const dotenv = require("dotenv");
+const cookieParser = require("cookie-parser");
+
+dotenv.config();
 
 const connectDB = require("./db");
 const authRoutes = require("./authRoutes");
 
-dotenv.config();
-
 const app = express();
 
 app.use(express.json());
+app.use(cookieParser());
 
 connectDB();
 
@@ -16,6 +18,7 @@ app.use("/api/auth", authRoutes);
 
 app.get("/", (req, res) => {
     res.json({
+        success: true,
         message: "Authentication API is running"
     });
 });
