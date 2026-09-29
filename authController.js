@@ -304,7 +304,9 @@ const loginUser = async (req, res) => {
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    user.refreshToken = refreshToken;
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+user.refreshToken = hashedRefreshToken;
 await user.save();
 
     res.cookie("accessToken", accessToken, {
@@ -404,6 +406,24 @@ const refreshAccessToken = async (req, res) => {
 
 const logoutUser = async (req, res) => {
   try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (refreshToken) {
+      try {
+        const decoded = jwt.verify(
+          refreshToken,
+          process.env.JWT_REFRESH_SECRET
+        );
+
+        await User.findByIdAndUpdate(decoded.id, {
+          $unset: {
+            refreshToken: 1,
+          },
+        });
+      } catch (error) {
+      }
+    }
+
     res.clearCookie("accessToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
