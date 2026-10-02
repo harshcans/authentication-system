@@ -1,54 +1,30 @@
-const mongoose = require("mongoose");
+const express = require("express");
 
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-    },
+const {
+  registerUser,
+  verifyOtp,
+  resendOtp,
+  loginUser,
+  refreshAccessToken,
+  logoutUser
+} = require("./authController");
 
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      match: [
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-        "Please provide a valid email address",
-      ],
-    },
+const protect = require("./authMiddleware");
 
-    password: {
-      type: String,
-      required: true,
-    },
+const router = express.Router();
 
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
+router.post("/register", registerUser);
+router.post("/verify-otp", verifyOtp);
+router.post("/resend-otp", resendOtp);
+router.post("/login", loginUser);
+router.post("/refresh-token", refreshAccessToken);
+router.post("/logout", logoutUser);
 
-    otp: {
-      type: String,
-    },
+router.get("/me", protect, (req, res) => {
+  res.status(200).json({
+    success: true,
+    user: req.user
+  });
+});
 
-    otpExpiresAt: {
-      type: Date,
-    },
-
-    otpResendCount: {
-      type: Number,
-      default: 0,
-    },
-
-    refreshToken: {
-      type: String,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-module.exports = mongoose.model("User", userSchema);
+module.exports = router;
